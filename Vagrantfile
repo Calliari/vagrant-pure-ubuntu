@@ -13,16 +13,53 @@ end
 
 Vagrant.configure("2") do |config|
 
-  config.vm.box = "ubuntu/trusty64"
-  config.vm.network "forwarded_port", guest: 80, host: 8080
-  config.vm.network "private_network", ip: "192.168.10.100"
-  config.hostsupdater.aliases = ["development.local"]
+
+  host = RbConfig::CONFIG['host_os']
+
+  config.vm.network "private_network", type: "dhcp"
+
+  # For this to work you need to:  vagrant plugin install vagrant-vbguest --plugin-version 0.21
+  config.vm.synced_folder ".", "/vagrant", type: "nfs"
+
+  private_network_addr = '172.28.128.'
+
+  config.vm.define "db" do |db|
+    vm_role = 'db'
+    db.vm.provider :virtualbox do |vb|
+      vb.name = vm_role + "-Box"
+      vb.memory = 1024
+      vb.customize ["modifyvm", :id, "--description", "DB VM used to demonstrate Infrastructure as code principles via Vagrant and configure the vm with ansible."]
+    end
+    db.vm.network :private_network, ip: "#{private_network_addr}10"
+    db.vm.box = vm_role + "-server"
+    db.vm.box = "centos/7"
+    db.ssh.pty = true
+    db.ssh.insert_key = false
+    db.vm.hostname = vm_role + "-Box"
+  end
+
+  config.vm.define "app" do |app|
+    vm_role = 'app'
+    app.vm.provider :virtualbox do |vb|
+      vb.name = "#{vm_role}-Box"
+      vb.memory = 1024
+      vb.customize ["modifyvm", :id, "--description", "APP VM used to demonstrate Infrastructure as code principles via Vagrant and configure the vm with ansible."]
+    end
+    app.vm.network :private_network, ip: "#{private_network_addr}11"
+    app.vm.network "forwarded_port", guest: 80, host: 8080
+    app.hostsupdater.aliases = ["development.local"]
+    app.vm.box = "#{vm_role}-server"
+    app.vm.box = "centos/7"
+    app.ssh.pty = true
+    app.ssh.insert_key = false
+    app.vm.hostname =  "#{vm_role}-Box"
+    app.vm.provision "shell", path: "provision.sh" #, privileged: false
+  end
 
   # config.vm.synced_folder "config-nginx", "/home/ubuntu/"
 
   # config.vm.provision :file, source: 'provision-jenkins.sh', destination: '~/provision-jenkins.sh'
 
-  config.vm.provision "shell", path: "provision.sh" #, privileged: false
 
   config.vm.post_up_message = "Welcome! This is the vagrant virtual environment.
   Use the command 'vagrant ssh' to access your the VM."
